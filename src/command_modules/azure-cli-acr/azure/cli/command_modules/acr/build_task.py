@@ -299,6 +299,7 @@ def acr_build_task_list_builds(cmd,
                                top=15,
                                build_task_name=None,
                                build_status=None,
+                               image=None,
                                resource_group_name=None):
     _, resource_group_name = validate_managed_registry(
         cmd.cli_ctx, registry_name, resource_group_name, BUILD_TASKS_NOT_SUPPORTED)
@@ -306,6 +307,14 @@ def acr_build_task_list_builds(cmd,
     filter_str = None
     filter_str = _add_build_filter(filter_str, 'BuildTaskName', build_task_name)
     filter_str = _add_build_filter(filter_str, 'Status', build_status)
+
+    if image:
+        from .repository import get_image_digest
+        try:
+            repository, _, manifest = get_image_digest(cmd.cli_ctx, registry_name, resource_group_name, image)
+            # filter_str = _add_build_filter(filter_str, 'OutputImageManifests', '{}@{}'.format(repository, manifest))
+        except CLIError as e:
+            raise CLIError("Could not find image '{}'. {}".format(image, e))
 
     return client.list(resource_group_name, registry_name, filter=filter_str, top=top)
 
@@ -323,19 +332,36 @@ def acr_build_task_logs(cmd,
                         registry_name,
                         build_id=None,
                         build_task_name=None,
+                        image=None,
                         resource_group_name=None):
     _, resource_group_name = validate_managed_registry(
         cmd.cli_ctx, registry_name, resource_group_name, BUILD_TASKS_NOT_SUPPORTED)
 
     if not build_id:
         # show logs for the last build
-        paged_builds = acr_build_task_list_builds(cmd, client, registry_name,
-                                                  top=None, build_task_name=build_task_name)
+        paged_builds = acr_build_task_list_builds(cmd,
+                                                  client,
+                                                  registry_name,
+                                                  top=1,
+                                                  build_task_name=build_task_name,
+                                                  image=image)
         try:
             build_id = paged_builds.get(0)[0].build_id
-            logger.warning("Showing logs for the last created build")
+            logger.warning(_get_list_builds_message(base_message="Showing logs of the last created build",
+                                                    build_task_name=build_task_name,
+                                                    image=image))
             logger.warning("Build ID: %s", build_id)
         except (AttributeError, KeyError, TypeError, IndexError):
-            raise CLIError('Could not get the last created build.')
+            raise CLIError(_get_list_builds_message(base_message="Could not get the last created build",
+                                                    build_task_name=build_task_name,
+                                                    image=image))
 
     return acr_build_show_logs(client, build_id, registry_name, resource_group_name)
+
+
+def _get_list_builds_message(base_message, build_task_name=None, image=None):
+    if build_task_name:
+        base_message = "{} for build task '{}'".format(base_message, build_task_name)
+    if image:
+        base_message = "{} for image '{}'".format(base_message, image)
+    return "{}.".format(base_message)

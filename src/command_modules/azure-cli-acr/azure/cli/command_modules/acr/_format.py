@@ -162,11 +162,26 @@ def _build_task_detail_format_group(item):
 
 
 def _build_format_group(item):
+    output_images = ' '
+    try:
+        output_images_raw = item['outputImages']
+        if output_images_raw:
+            output_images_list = []
+            for image in output_images_raw:
+                try:
+                    output_images_list.append('{}:{}'.format(image['repository'], image['tag']))
+                except KeyError:
+                    pass
+            output_images = ', '.join(output_images_list)
+    except KeyError:
+        pass
+
     return OrderedDict([
         ('BUILD ID', _get_value(item, 'buildId')),
         ('TASK', _get_value(item, 'buildTask')),
         ('PLATFORM', _get_value(item, 'platform', 'osType')),
         ('STATUS', _get_value(item, 'status')),
+        ('OUTPUT IMAGES', output_images),
         ("TRIGGER", _get_build_trigger(_get_value(item, 'imageUpdateTrigger'), _get_value(item, 'gitCommitTrigger'))),
         ('STARTED', _format_datetime(_get_value(item, 'startTime'))),
         ('DURATION', _get_duration(_get_value(item, 'startTime'), _get_value(item, 'finishTime')))
