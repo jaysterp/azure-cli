@@ -305,25 +305,30 @@ def acr_build_task_list_builds(cmd,
         cmd.cli_ctx, registry_name, resource_group_name, BUILD_TASKS_NOT_SUPPORTED)
 
     filter_str = None
-    filter_str = _add_build_filter(filter_str, 'BuildTaskName', build_task_name)
-    filter_str = _add_build_filter(filter_str, 'Status', build_status)
+    filter_str = _add_build_filter(filter_str, 'BuildTaskName', build_task_name, 'eq')
+    filter_str = _add_build_filter(filter_str, 'Status', build_status, 'eq')
 
     if image:
         from .repository import get_image_digest
         try:
             repository, _, manifest = get_image_digest(cmd.cli_ctx, registry_name, resource_group_name, image)
-            # filter_str = _add_build_filter(filter_str, 'OutputImageManifests', '{}@{}'.format(repository, manifest))
+            filter_str = _add_build_filter(
+                filter_str, 'OutputImageManifests', '{}@{}'.format(repository, manifest), 'contains')
         except CLIError as e:
             raise CLIError("Could not find image '{}'. {}".format(image, e))
 
     return client.list(resource_group_name, registry_name, filter=filter_str, top=top)
 
 
-def _add_build_filter(orig_filter, name, value):
+def _add_build_filter(orig_filter, name, value, operator):
     if not value:
         return orig_filter
 
-    new_filter_str = "{} eq '{}'".format(name, value)
+    if operator == 'contains':
+        new_filter_str = "{}({}, '{}')".format(operator, name, value)
+    else:
+        new_filter_str = "{} eq '{}'".format(name, value)
+
     return "{} and {}".format(orig_filter, new_filter_str) if orig_filter else new_filter_str
 
 
